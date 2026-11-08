@@ -1,0 +1,12 @@
+#!/bin/sh
+# Сессия киоска: без заставки, без курсора, оба монитора показывают одно и то же.
+xset s off -dpms
+unclutter -idle 0 &
+# Клонируем второй выход на первый. Имена выходов смотреть через `xrandr -q`.
+PRIMARY=$(xrandr -q | awk '/ connected/{print $1; exit}')
+for OUT in $(xrandr -q | awk '/ connected/{print $1}'); do
+  [ "$OUT" != "$PRIMARY" ] && xrandr --output "$OUT" --same-as "$PRIMARY" --auto
+done
+openbox &
+set -a; . /etc/bus-player/player.env; set +a
+exec /opt/BusPlayer/busplayer --no-sandbox

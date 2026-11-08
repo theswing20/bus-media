@@ -1,0 +1,16 @@
+[Unit]
+Description=Bus media player (ads + stop announcements)
+After=network-online.target gpsd.service sound.target
+Wants=gpsd.service
+
+[Service]
+User=bus
+WorkingDirectory=/home/bus
+ExecStart=/usr/bin/startx /home/bus/.xinitrc -- :0 -nocursor
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/bus-player.log
+StandardError=append:/var/log/bus-player.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+*.log
+uploads/
+apps/server/uploads
+apps/player/cache
+.DS_Store
+.claude/

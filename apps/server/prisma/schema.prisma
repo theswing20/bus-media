@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Route {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  nameKk    String
+  nameRu    String
+  stops     Stop[]
+  devices   Device[]
+  campaigns CampaignRoute[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stop {
+  id        String  @id @default(cuid())
+  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId   String
+  direction Int     // 0 — туда, 1 — обратно
+  seq       Int
+  nameKk    String
+  nameRu    String
+  lat       Float
+  lng       Float
+  radiusM   Int     @default(60)
+  // Пути к аудиофайлам (относительно UPLOAD_DIR). Генерируются TTS или загружаются вручную.
+  audioNextKk   String?
+  audioNextRu   String?
+  audioArriveKk String?
+  audioArriveRu String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([routeId, direction, seq])
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  kind        String   // video | image | audio
+  filename    String
+  path        String   // относительно UPLOAD_DIR
+  mime        String
+  sha256      String
+  bytes       Int
+  durationSec Float    @default(15)
+  createdAt   DateTime @default(now())
+  campaignItems CampaignMedia[]
+  impressions Impression[]
+}
+
+model Campaign {
+  id         String   @id @default(cuid())
+  name       String
+  advertiser String?
+  startsAt   DateTime
+  endsAt     DateTime
+  active     Boolean  @default(true)
+  // Если routes пуст — крутится на всех маршрутах
+  routes     CampaignRoute[]
+  media      CampaignMedia[]
+  impressions Impression[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model CampaignRoute {
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId    String
+  @@id([campaignId, routeId])
+}
+
+model CampaignMedia {
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  media      Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  mediaId    String
+  weight     Int      @default(1)
+  @@id([campaignId, mediaId])
+}
+
+model Device {
+  id              String    @id @default(cuid())
+  busNumber       String    @unique // гаражный номер, A7xx
+  token           String    @unique
+  route           Route?    @relation(fields: [routeId], references: [id])
+  routeId         String?
+  lastSeenAt      DateTime?
+  lastLat         Float?
+  lastLng         Float?
+  manifestVersion String?
+  appVersion      String?
+  settings        Json?     // переопределение PlayerSettings
+  occupancy       Int?      // сколько людей в салоне по последнему heartbeat (null — датчиков нет)
+  occupancyAt     DateTime?
+  impressions     Impression[]
+  passengerCounts PassengerCount[]
+  createdAt       DateTime  @default(now())
+}
+
+model Impression {
+  id         String   @id // uuid с плеера — идемпотентность
+  device     Device   @relation(fields: [deviceId], references: [id])
+  deviceId   String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId String
+  media      Media    @relation(fields: [mediaId], references: [id])
+  mediaId    String
+  startedAt  DateTime
+  endedAt    DateTime
+  completed  Boolean
+  lat        Float?
+  lng        Float?
+  routeId    String?
+  stopId     String?
+  audience   Int?     // было в салоне на старте + вошло за время ролика (null — нет датчиков)
+  receivedAt DateTime @default(now())
+
+  @@index([campaignId, startedAt])
+  @@index([deviceId, startedAt])
+}
+
+/// Событие датчика подсчёта пассажиров: сколько вошло/вышло через дверь.
+model PassengerCount {
+  id         String   @id // uuid с плеера — идемпотентность
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  at         DateTime
+  door       Int?
+  boarded    Int
+  alighted   Int
+  occupancy  Int      // заполненность после события
+  routeId    String?
+  stopId     String?
+  direction  Int?
+  lat        Float?
+  lng        Float?
+  receivedAt DateTime @default(now())
+
+  @@index([deviceId, at])
+  @@index([routeId, at])
+  @@index([stopId, at])
+}
