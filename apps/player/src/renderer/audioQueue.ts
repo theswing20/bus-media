@@ -25,9 +25,10 @@ export class AudioQueue {
     const a = new Audio(item.url);
     a.volume = this.volume;
     this.current = a;
+    const name = item.url.split("/").pop();
     const done = () => { this.playing = false; this.current = null; setTimeout(() => this.next(), 300); };
-    a.onended = done;
-    a.onerror = done;
-    a.play().catch(done);
+    a.onended = () => { window.player.log("info", `announce played ${name} (${a.duration.toFixed(1)}s)`); done(); };
+    a.onerror = () => { window.player.log("warn", `announce error ${name}: ${a.error?.message ?? a.error?.code}`); done(); };
+    a.play().catch((e) => { window.player.log("warn", `announce play() rejected ${name}: ${e}`); done(); });
   }
 }

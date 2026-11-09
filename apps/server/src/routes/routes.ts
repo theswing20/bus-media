@@ -87,6 +87,28 @@ export async function routesRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /**
+   * Перегенерировать озвучку всех остановок маршрута (после смены голоса/провайдера).
+   * Уже озвученные теми же голосом и текстом фразы берутся из кэша — кредиты не тратятся.
+   */
+  app.post("/routes/:id/regenerate-audio", async (req) => {
+    const { id } = req.params as { id: string };
+    const stops = await db.stop.findMany({ where: { routeId: id }, orderBy: [{ direction: "asc" }, { seq: "asc" }] });
+    const failed: { stop: string; error: string }[] = [];
+    let ok = 0;
+    for (const s of stops) {
+      try {
+        const audio = await generateStopAudio(s.id, s.nameKk, s.nameRu);
+        await db.stop.update({ where: { id: s.id }, data: audio });
+        ok++;
+      } catch (e) {
+        failed.push({ stop: s.nameRu, error: (e as Error).message });
+        if (failed.length === 1 && /not configured|not set|401|403/.test((e as Error).message)) break; // нет смысла долбить дальше
+      }
+    }
+    return { total: stops.length, ok, failed };
+  });
+
   /** Перегенерировать озвучку (например, после смены голоса) */
   app.post("/stops/:stopId/regenerate-audio", async (req) => {
     const { stopId } = req.params as { stopId: string };
